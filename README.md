@@ -8,6 +8,14 @@
 ![python](https://img.shields.io/badge/python-3.10%2B-blue)
 ![license](https://img.shields.io/badge/license-MIT-green)
 
+## Goal
+
+Let a user build, evaluate, and talk to voice AI agents from one
+dashboard: run a real-time speech-in/speech-out voice agent, evaluate an
+agent's conversation quality, compare speech (ASR/TTS) model/provider
+choices, and query documents through a voice-driven RAG chatbot —
+instead of four disconnected CLI tools.
+
 ## Combines
 
 This is a flagship suite that will combine 4 voice/speech repos into one web

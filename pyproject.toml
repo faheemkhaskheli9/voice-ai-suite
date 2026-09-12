@@ -1,0 +1,5 @@
+[project]
+name = "voice-ai-suite"
+version = "0.1.0"
+description = "Voice AI Suite: real-time voice agent, agent evaluation, speech model evaluator, and voice RAG chatbot behind one feature picker"
+requires-python = ">=3.10"

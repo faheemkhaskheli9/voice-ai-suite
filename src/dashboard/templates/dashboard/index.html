@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Voice AI Suite</title>
+</head>
+<body>
+  <h1>Voice AI Suite</h1>
+  <p>Signed in as {{ user }} — <a href="{% url 'logout' %}">Log out</a></p>
+  <ul>
+    {% for feature in features %}
+    <li>
+      <a href="{% url 'feature' slug=feature.slug %}">{{ feature.title }}</a>
+      <p>{{ feature.description }}</p>
+    </li>
+    {% endfor %}
+  </ul>
+</body>
+</html>

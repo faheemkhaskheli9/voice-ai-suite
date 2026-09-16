@@ -3,8 +3,17 @@ name = "voice-ai-suite"
 version = "0.1.0"
 description = "Voice AI Suite: real-time voice agent, agent evaluation, speech model evaluator, and voice RAG chatbot behind one feature picker"
 requires-python = ">=3.10"
+dependencies = [
+    "Django==5.2.6",
+]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=8.0",
+    "pytest-django==4.11.1",
 ]
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "voice_suite.settings"
+pythonpath = ["src"]
+testpaths = ["tests"]

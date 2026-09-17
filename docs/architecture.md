@@ -16,8 +16,11 @@ Dashboard (pick a feature) ->
   STT wrapper, pluggable TTS backend wrapper, latency instrumentation,
   session/config handling
 - `realtime_agent` feature app — ported from `realtime-voice-agent`
-  (`src/rtva/`): LiveKit room/worker/token management, streaming STT/TTS,
-  interruption handling, tool calling, conversation memory
+  (`src/rtva/`): LiveKit room/worker/token management (config, room, worker,
+  token, livekit_client all ported as of this session; local audio capture
+  goes through `voice_core.audio`'s shared `AudioSource` rather than a
+  separate capture path), streaming STT/TTS, interruption handling, tool
+  calling, conversation memory (not yet ported)
 - `agent_evaluation` feature app — ported from `voice-agent-evaluation`
   (`src/vae/`): persona scripting, simulated caller, LLM-as-judge scoring;
   can target `realtime_agent` as its agent-under-test once Phase 2 lands

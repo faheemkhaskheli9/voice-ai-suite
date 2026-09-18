@@ -19,8 +19,9 @@ Dashboard (pick a feature) ->
   (`src/rtva/`): LiveKit room/worker/token management (config, room, worker,
   token, livekit_client all ported as of this session; local audio capture
   goes through `voice_core.audio`'s shared `AudioSource` rather than a
-  separate capture path), streaming STT/TTS, interruption handling, tool
-  calling, conversation memory (not yet ported)
+  separate capture path), streaming STT/TTS, barge-in interruption handling
+  and tool/function calling (`dialogue.py`'s bounded planner/tool-call loop,
+  issue #7), conversation memory (not yet ported)
 - `agent_evaluation` feature app — ported from `voice-agent-evaluation`
   (`src/vae/`): persona scripting, simulated caller, LLM-as-judge scoring;
   can target `realtime_agent` as its agent-under-test once Phase 2 lands

@@ -1,0 +1,31 @@
+# Persona scripting template.
+#
+# A persona describes how a simulated caller behaves during a voice-agent
+# test. Copy this file into examples/personas/<name>.yaml and edit.
+# Validate with:  python -m agent_evaluation.cli validate examples/personas/<name>.yaml
+#
+# Required fields:
+#   name              short unique label
+#   goal              what the caller is trying to achieve
+#   tone              caller demeanour (e.g. calm, frustrated, hurried)
+#   sample_utterances ordered list of things the caller might say (>= 1)
+#   success_criteria  conditions that mark the call a pass (>= 1)
+#
+# Optional fields:
+#   max_turns  hard cap on caller turns (default 12, 1..100)
+#   language   ISO code (default "en")
+#   metadata   free-form string->string map (tags, ticket ids, ...)
+
+name: example_persona
+goal: Describe the caller's objective in one sentence.
+tone: neutral
+sample_utterances:
+  - "Hi, I need some help with my account."
+  - "Can you look that up for me?"
+success_criteria:
+  - "Agent identifies the caller's intent."
+  - "Agent provides a correct, actionable answer."
+max_turns: 12
+language: en
+metadata:
+  suite: smoke

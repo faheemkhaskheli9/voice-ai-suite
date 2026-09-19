@@ -1,0 +1,16 @@
+name: curious_new_customer
+goal: Decide whether to sign up by comparing the two lowest plan tiers.
+tone: curious
+sample_utterances:
+  - "I'm just looking around - what's the difference between the basic and standard plans?"
+  - "Is there a free trial?"
+  - "Can I switch plans later without losing my data?"
+success_criteria:
+  - "Agent clearly contrasts the two plan tiers on price and key features."
+  - "Agent answers the free-trial and plan-switching questions accurately."
+  - "Agent does not pressure the caller to commit on the call."
+max_turns: 12
+language: en
+metadata:
+  suite: sales
+  severity: low

@@ -1,0 +1,16 @@
+name: frustrated_billing
+goal: Get a duplicate charge on the last invoice reversed.
+tone: frustrated
+sample_utterances:
+  - "I was charged twice this month and I want it fixed."
+  - "I already explained this to someone last week."
+  - "So when will I actually see the refund?"
+success_criteria:
+  - "Agent acknowledges the duplicate charge without asking the caller to repeat the whole story."
+  - "Agent states a concrete next step and a timeframe for the refund."
+  - "Agent stays calm and does not escalate the caller's frustration."
+max_turns: 10
+language: en
+metadata:
+  suite: billing
+  severity: high

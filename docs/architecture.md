@@ -64,6 +64,12 @@ Dashboard (pick a feature) ->
   retrieval miss short-circuits to a fixed fallback without ever calling the
   LLM backend, and a grounded response carries structured `SourceCitation`s
   derived from chunk metadata rather than parsed out of the model's own text.
+  As of 2026-09-19, the feature app is complete end-to-end (`chatbot.py`,
+  issue #17): `VoiceRagChatbot` wires `RagRetriever` -> `ResponseGenerator` ->
+  the Phase 1 `voice_core.tts.TextToSpeech` wrapper into one turn (capture ->
+  transcribe -> retrieve -> generate -> speak); a TTS failure is caught and
+  turned into `audio_path=None` rather than losing the already-generated,
+  sourced text answer.
 
 ## Design Notes
 

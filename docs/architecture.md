@@ -43,7 +43,18 @@ Dashboard (pick a feature) ->
   categories so they're directly comparable
 - `voice_rag_chatbot` feature app — ported from `python-voice-rag-chatbot`
   (`src/voice_rag_chatbot/`): mic/file capture, transcription, RAG retrieval,
-  LLM response, TTS playback
+  LLM response, TTS playback. As of 2026-09-19, mic/file capture and RAG
+  retrieval are in (issue #15), applying the knowledge-base "Chunking &
+  embedding ingestion" pattern
+  (`E:\Projects\LLM\knowledge-base\rag\chunking-and-embedding-ingestion.md`):
+  `chunking.py`/`embeddings.py`/`vector_store.py`/`ingest.py` mirror that
+  pattern's own reference implementation (`hybrid-research-agent/src/kb/`) —
+  deterministic chunk ids from `hash(source, chunk_index, chunk_text)` for
+  idempotent re-ingestion, a swappable `HashingEmbedder` (CPU-only, no paid
+  API), and an atomically-written `JSONVectorStore`. `retrieval.py`'s
+  `RagRetriever` feeds a `voice_core.audio.AudioSource` capture through
+  `voice_core.stt.SpeechToText` and embeds the transcribed text to query the
+  store — the same shared audio/STT layer every other feature app uses.
 
 ## Design Notes
 

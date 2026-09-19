@@ -9,6 +9,7 @@ dependencies = [
     "PyYAML>=6.0",
     "pydantic>=2.0",
     "jiwer>=3.0.0",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

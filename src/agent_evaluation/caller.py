@@ -17,15 +17,28 @@ a hard turn cap (the shorter of the script length and the persona's own
 timed out / room closed) rather than collapsing every non-response into one
 generic failure, and a single terminal :class:`CallStatus` recorded at the
 end instead of relying on the model/agent to self-report "done".
+
+:class:`AgentUnderTestBackend` (issue #10) is a third ``VoiceRoomBackend``
+that targets this suite's own Phase 2 real-time agent
+(:class:`realtime_agent.worker.AgentWorker`) instead of an external LiveKit
+deployment or a bare stub callable -- so the evaluation feature can exercise
+the in-suite agent end to end, offline, the same way ``FakeVoiceRoomBackend``
+exercises the turn-taking loop itself.
 """
 
 from __future__ import annotations
 
+import asyncio
+from concurrent.futures import Future, ThreadPoolExecutor
+from concurrent.futures import TimeoutError as FutureTimeoutError
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Protocol
+from typing import TYPE_CHECKING, Protocol
 
 from .persona import Persona
+
+if TYPE_CHECKING:
+    from realtime_agent.worker import AgentWorker
 
 __all__ = [
     "CallStatus",
@@ -36,6 +49,7 @@ __all__ = [
     "VoiceRoomBackend",
     "FakeVoiceRoomBackend",
     "LiveKitRoomBackend",
+    "AgentUnderTestBackend",
     "run_persona_call",
 ]
 
@@ -75,6 +89,10 @@ class CallResult:
     status: CallStatus
     turns: tuple[CallTurn, ...] = field(default_factory=tuple)
     error: str | None = None
+    #: Which agent build/config this run exercised (e.g. "agent-worker@v1"),
+    #: taken from the backend's ``target_label`` when it has one. ``None``
+    #: for backends that don't identify a specific agent version.
+    agent_target: str | None = None
 
     @property
     def completed(self) -> bool:
@@ -178,6 +196,85 @@ class LiveKitRoomBackend:
             self._room = None
 
 
+class AgentUnderTestBackend:
+    """Targets this suite's own Phase 2 real-time agent as the agent-under-test.
+
+    Turns are driven through the worker's real ``handle_user_turn`` dialogue
+    loop (planner + tool calling) rather than raw LiveKit audio -- consistent
+    with :class:`VoiceRoomBackend`'s "audio is plain text" contract. The
+    worker's own room client is whatever its config built (``FakeRoomClient``
+    unless real LiveKit credentials are set -- see
+    ``realtime_agent.room.build_room_client``), so this backend is
+    offline-safe by default, the same CPU-only convention every other
+    feature app in this suite follows.
+
+    ``handle_user_turn`` is synchronous-planner-driven but declared
+    ``async def``; each turn runs it on a dedicated worker thread (via
+    ``asyncio.run`` inside a fresh event loop on that thread) so a genuinely
+    slow/stuck planner is still bounded by ``timeout`` instead of blocking
+    forever -- a plain ``asyncio.wait_for`` around a synchronous planner call
+    would not preempt it, since nothing in the call ever yields to the loop.
+
+    ``agent_version`` is recorded on ``target_label`` (surfaced on
+    :class:`CallResult` as ``agent_target``) so an evaluation run can tell
+    which build of the in-suite agent it exercised.
+    """
+
+    def __init__(self, worker: "AgentWorker", agent_version: str = "dev") -> None:
+        if worker.planner is None:
+            raise ValueError(
+                "AgentUnderTestBackend requires an AgentWorker configured with a planner"
+            )
+        self.worker = worker
+        self.target_label = f"{worker.config.agent_identity}@{agent_version}"
+        self._session_id: str | None = None
+        self._turn_index = 0
+        self._pending_utterance: str | None = None
+
+    def connect(self, room_name: str) -> None:
+        self._session_id = room_name
+        self._turn_index = 0
+        try:
+            asyncio.run(self.worker.room.connect())
+        except Exception as exc:  # noqa: BLE001 - any transport failure means the room never opened
+            raise RoomClosedError(f"agent-under-test failed to connect: {exc}") from exc
+
+    def publish_utterance(self, text: str) -> None:
+        if self._session_id is None:
+            raise RoomClosedError("cannot publish before connecting")
+        self._pending_utterance = text
+
+    def await_response(self, timeout: float) -> str | None:
+        if self._session_id is None or self._pending_utterance is None:
+            raise RoomClosedError("cannot await a response before publishing an utterance")
+
+        from realtime_agent.dialogue import ToolLoopExceeded  # noqa: PLC0415 - keeps this module importable without realtime_agent at collection time
+
+        run_id = f"{self._session_id}-{self._turn_index}"
+        self._turn_index += 1
+        utterance = self._pending_utterance
+        session_id = self._session_id
+
+        def _run_turn() -> str:
+            return asyncio.run(self.worker.handle_user_turn(utterance, run_id, session_id))
+
+        pool = ThreadPoolExecutor(max_workers=1)
+        future: Future[str] = pool.submit(_run_turn)
+        try:
+            return future.result(timeout=timeout)
+        except FutureTimeoutError:
+            return None
+        except ToolLoopExceeded as exc:
+            raise RoomClosedError(str(exc)) from exc
+        finally:
+            pool.shutdown(wait=False)
+
+    def disconnect(self) -> None:
+        if self._session_id is not None:
+            asyncio.run(self.worker.room.disconnect())
+        self._session_id = None
+
+
 def run_persona_call(
     persona: Persona,
     backend: VoiceRoomBackend,
@@ -195,18 +292,22 @@ def run_persona_call(
     script = persona.sample_utterances
     turn_cap = min(len(script), persona.max_turns)
     turns: list[CallTurn] = []
+    #: Which agent build/config this run targets, if the backend identifies
+    #: one (see AgentUnderTestBackend.target_label) -- carried onto every
+    #: CallResult returned below so a report can tell runs apart by target.
+    agent_target = getattr(backend, "target_label", None)
 
     try:
         backend.connect(room_name)
     except RoomClosedError as exc:
         return CallResult(
             persona_name=persona.name, room_name=room_name,
-            status=CallStatus.ROOM_CLOSED, error=str(exc),
+            status=CallStatus.ROOM_CLOSED, error=str(exc), agent_target=agent_target,
         )
     except Exception as exc:  # backend-specific failure (e.g. LiveKitUnavailableError)
         return CallResult(
             persona_name=persona.name, room_name=room_name,
-            status=CallStatus.ERROR, error=str(exc),
+            status=CallStatus.ERROR, error=str(exc), agent_target=agent_target,
         )
 
     try:
@@ -220,6 +321,7 @@ def run_persona_call(
                 return CallResult(
                     persona_name=persona.name, room_name=room_name,
                     status=CallStatus.ROOM_CLOSED, turns=tuple(turns), error=str(exc),
+                    agent_target=agent_target,
                 )
 
             if response is None:
@@ -228,6 +330,7 @@ def run_persona_call(
                     persona_name=persona.name, room_name=room_name,
                     status=CallStatus.TIMEOUT, turns=tuple(turns),
                     error=f"no response to turn {index} within {turn_timeout}s",
+                    agent_target=agent_target,
                 )
 
             turns.append(CallTurn(index, utterance, agent_response=response))
@@ -238,7 +341,8 @@ def run_persona_call(
             else CallStatus.MAX_TURNS_REACHED
         )
         return CallResult(
-            persona_name=persona.name, room_name=room_name, status=status, turns=tuple(turns)
+            persona_name=persona.name, room_name=room_name, status=status, turns=tuple(turns),
+            agent_target=agent_target,
         )
     finally:
         backend.disconnect()

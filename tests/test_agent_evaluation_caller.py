@@ -8,9 +8,12 @@ acceptance criterion.
 
 from __future__ import annotations
 
+import time
+
 import pytest
 
 from agent_evaluation.caller import (
+    AgentUnderTestBackend,
     CallStatus,
     FakeVoiceRoomBackend,
     LiveKitRoomBackend,
@@ -19,6 +22,9 @@ from agent_evaluation.caller import (
     run_persona_call,
 )
 from agent_evaluation.persona import Persona
+from realtime_agent.config import LiveKitConfig
+from realtime_agent.dialogue import FinalResponse, ToolCall, ToolCallStep
+from realtime_agent.worker import AgentWorker
 
 
 def _persona(**overrides) -> Persona:
@@ -152,3 +158,98 @@ def test_real_backend_raises_clear_error_without_livekit_installed():
     backend = LiveKitRoomBackend(url="wss://example.invalid", token="fake-token")
     with pytest.raises(LiveKitUnavailableError, match="livekit"):
         backend.connect("room-1")
+
+
+# --- targeting the suite's own Phase 2 real-time agent (issue #10) --------
+
+
+class _EchoPlanner:
+    """Fake `Planner`: always gives a final response echoing the user's text."""
+
+    def plan(self, user_text, tool_results, history=()):
+        return FinalResponse(text=f"heard: {user_text}")
+
+
+class _AlwaysToolCallPlanner:
+    """Fake `Planner` that never produces a final response -- drives the
+    worker's own `ToolLoopExceeded` so the mapping to `RoomClosedError` can
+    be exercised without a real LLM."""
+
+    def plan(self, user_text, tool_results, history=()):
+        return ToolCallStep(calls=(ToolCall(name="noop", arguments={}),))
+
+
+class _SlowPlanner:
+    """Fake `Planner` that blocks the calling thread for `delay` seconds --
+    stands in for a stuck/slow real planner to prove `await_response`
+    still honours its `timeout` instead of hanging."""
+
+    def __init__(self, delay: float) -> None:
+        self._delay = delay
+
+    def plan(self, user_text, tool_results, history=()):
+        time.sleep(self._delay)
+        return FinalResponse(text="done")
+
+
+def _agent_worker(planner) -> AgentWorker:
+    config = LiveKitConfig.from_env(env={})
+    worker = AgentWorker(config, planner=planner)
+    if isinstance(planner, _AlwaysToolCallPlanner):
+        worker.tools.register("noop", lambda: None)
+    return worker
+
+
+def test_agent_under_test_backend_requires_a_configured_planner():
+    worker = AgentWorker(LiveKitConfig.from_env(env={}))
+    with pytest.raises(ValueError, match="planner"):
+        AgentUnderTestBackend(worker)
+
+
+def test_agent_under_test_backend_runs_full_script_against_the_real_worker():
+    worker = _agent_worker(_EchoPlanner())
+    persona = _persona()
+    backend = AgentUnderTestBackend(worker)
+
+    result = run_persona_call(persona, backend, "eval-room-1")
+
+    assert result.status == CallStatus.SCRIPT_COMPLETE
+    assert len(result.turns) == 3
+    assert result.turns[0].agent_response == "heard: Hello."
+
+
+def test_agent_under_test_backend_records_agent_target_on_call_result():
+    worker = _agent_worker(_EchoPlanner())
+    persona = _persona(sample_utterances=["Hello."])
+    backend = AgentUnderTestBackend(worker, agent_version="v1")
+
+    result = run_persona_call(persona, backend, "eval-room-1")
+
+    assert result.agent_target == "agent-worker@v1"
+
+
+def test_agent_under_test_backend_defaults_agent_version_to_dev():
+    worker = _agent_worker(_EchoPlanner())
+    backend = AgentUnderTestBackend(worker)
+
+    assert backend.target_label == "agent-worker@dev"
+
+
+def test_agent_under_test_backend_maps_tool_loop_exceeded_to_room_closed():
+    worker = _agent_worker(_AlwaysToolCallPlanner())
+    persona = _persona(sample_utterances=["Hello."])
+    backend = AgentUnderTestBackend(worker)
+
+    result = run_persona_call(persona, backend, "eval-room-2")
+
+    assert result.status == CallStatus.ROOM_CLOSED
+
+
+def test_agent_under_test_backend_returns_none_on_slow_planner_timeout():
+    worker = _agent_worker(_SlowPlanner(delay=0.3))
+    persona = _persona(sample_utterances=["Hello."])
+    backend = AgentUnderTestBackend(worker)
+
+    result = run_persona_call(persona, backend, "eval-room-3", turn_timeout=0.05)
+
+    assert result.status == CallStatus.TIMEOUT

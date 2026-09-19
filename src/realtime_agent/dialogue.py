@@ -23,6 +23,8 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Protocol
 
+from .memory import Turn
+
 #: A registered tool: any callable taking keyword arguments and returning a
 #: JSON-ish result. Real tools wrap e.g. a smart-home API, a calendar
 #: lookup, etc.; tests register plain functions/lambdas.
@@ -119,9 +121,21 @@ PlannerStep = ToolCallStep | FinalResponse
 class Planner(Protocol):
     """Decides, each iteration of a turn, whether to call tools or give a
     final response. Kept tiny and framework-free so it can be backed by a
-    real LLM function-calling API or a test fake interchangeably."""
+    real LLM function-calling API or a test fake interchangeably.
 
-    def plan(self, user_text: str, tool_results: tuple[ToolResult, ...]) -> PlannerStep: ...
+    `history` (issue #8) carries the session's prior turns -- oldest first,
+    already bounded by `memory.ConversationMemory` -- so a real planner can
+    fold them into the prompt it sends the LLM. It defaults to `()` so a
+    planner ignoring memory (e.g. a single-shot tool planner) doesn't need
+    to accept it explicitly.
+    """
+
+    def plan(
+        self,
+        user_text: str,
+        tool_results: tuple[ToolResult, ...],
+        history: tuple[Turn, ...] = (),
+    ) -> PlannerStep: ...
 
 
 class ToolRegistry:

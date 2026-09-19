@@ -21,7 +21,9 @@ Dashboard (pick a feature) ->
   goes through `voice_core.audio`'s shared `AudioSource` rather than a
   separate capture path), streaming STT/TTS, barge-in interruption handling
   and tool/function calling (`dialogue.py`'s bounded planner/tool-call loop,
-  issue #7), conversation memory (not yet ported)
+  issue #7), and conversation memory (`memory.py`'s per-session, bounded
+  `ConversationMemory`, issue #8) — `handle_user_turn` re-injects each
+  session's prior turns into the planner as `history` on every call
 - `agent_evaluation` feature app — ported from `voice-agent-evaluation`
   (`src/vae/`): persona scripting, simulated caller, LLM-as-judge scoring;
   can target `realtime_agent` as its agent-under-test once Phase 2 lands

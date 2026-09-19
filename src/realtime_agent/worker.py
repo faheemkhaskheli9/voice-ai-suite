@@ -25,6 +25,12 @@ tool-call loop and the ``RunState`` taxonomy. "Speaking" playback has no
 real audio-output hardware to drive in this environment (or CI), so it is
 simulated as an interruptible sleep sized to the response text
 (``_estimate_playback_seconds``) rather than actually playing audio.
+
+Issue #8: conversation memory, following the knowledge-base "Working
+memory" pattern (see ``memory.py``) -- the worker owns a bounded, per-
+session ``ConversationMemory`` and re-injects each session's prior turns
+into the planner on every call rather than relying on the (stateless)
+planner to remember anything itself.
 """
 
 from __future__ import annotations
@@ -51,6 +57,7 @@ from .dialogue import (
     ToolRegistry,
     ToolResult,
 )
+from .memory import ConversationMemory
 from .room import (
     EVENT_CONNECTED,
     EVENT_DISCONNECTED,
@@ -85,6 +92,7 @@ class AgentWorker:
     latency: LatencyTracker = field(default_factory=LatencyTracker)
     tools: ToolRegistry = field(default_factory=ToolRegistry)
     planner: Planner | None = None
+    memory: ConversationMemory = field(default_factory=ConversationMemory)
     _stop: asyncio.Event = field(default_factory=asyncio.Event, repr=False)
     events: list[tuple[str, dict]] = field(default_factory=list)
     local_audio: AudioBuffer | None = field(default=None, repr=False)
@@ -234,7 +242,7 @@ class AgentWorker:
 
     # --- tool/function calling -----------------------------------------
 
-    async def handle_user_turn(self, user_text: str, run_id: str) -> str:
+    async def handle_user_turn(self, user_text: str, run_id: str, session_id: str | None = None) -> str:
         """Run one bounded plan -> tool-call -> resume cycle for a user's
         utterance (stateful-run-lifecycle KB pattern) and return the final
         response text.
@@ -245,6 +253,14 @@ class AgentWorker:
         next iteration. The loop always terminates: either the planner
         returns a `FinalResponse`, or `MAX_TOOL_ITERATIONS` is reached and
         `ToolLoopExceeded` is raised -- never an unbounded tool-call chain.
+
+        `session_id` (issue #8) scopes conversation memory across turns --
+        defaults to `run_id` so a single ad-hoc turn still works without a
+        caller having to invent a session id. The session's prior turns
+        (oldest first, already bounded by `ConversationMemory`) are given to
+        the planner as `history` on every iteration; the finished turn is
+        recorded into memory only once a `FinalResponse` is reached (a turn
+        abandoned via `ToolLoopExceeded` never gets remembered).
         """
 
         if self.planner is None:
@@ -253,13 +269,17 @@ class AgentWorker:
                 "responses/tool calls for this turn."
             )
 
+        session_id = run_id if session_id is None else session_id
+        history = self.memory.history(session_id)
+
         self._state = RunState.PROCESSING
         tool_results: list[ToolResult] = []
         for _ in range(MAX_TOOL_ITERATIONS):
             with self.latency.stage(run_id, "llm"):
-                step = self.planner.plan(user_text, tuple(tool_results))
+                step = self.planner.plan(user_text, tuple(tool_results), history)
             if isinstance(step, FinalResponse):
                 self._state = RunState.IDLE
+                self.memory.add_turn(session_id, user_text, step.text)
                 return step.text
             assert isinstance(step, ToolCallStep)
             for call in step.calls:

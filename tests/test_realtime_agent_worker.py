@@ -12,6 +12,7 @@ from realtime_agent.dialogue import (
     ToolLoopExceeded,
     ToolRegistry,
 )
+from realtime_agent.memory import ConversationMemory, Turn
 from realtime_agent.room import (
     EVENT_CONNECTED,
     EVENT_DISCONNECTED,
@@ -58,8 +59,10 @@ class ScriptedPlanner:
 
     def __init__(self, steps):
         self._steps = list(steps)
+        self.seen_history = []
 
-    def plan(self, user_text, tool_results):
+    def plan(self, user_text, tool_results, history=()):
+        self.seen_history.append(history)
         return self._steps.pop(0)
 
 
@@ -68,7 +71,7 @@ class AlwaysToolCallPlanner:
     the tool-call loop terminates deliberately (`ToolLoopExceeded`) instead
     of looping forever."""
 
-    def plan(self, user_text, tool_results):
+    def plan(self, user_text, tool_results, history=()):
         return ToolCallStep(calls=(ToolCall(name="noop", arguments={}),))
 
 
@@ -281,6 +284,85 @@ def test_handle_user_turn_raises_tool_loop_exceeded_when_planner_never_finishes(
         asyncio.run(worker.handle_user_turn("loop forever", "run-1"))
 
     assert worker.state is RunState.IDLE
+
+
+# --- conversation memory (issue #8) -------------------------------------
+
+
+def test_handle_user_turn_records_completed_turn_into_memory():
+    planner = ScriptedPlanner([FinalResponse(text="Sure, done.")])
+    worker = AgentWorker(_dry_run_config(), planner=planner)
+
+    asyncio.run(worker.handle_user_turn("turn on the lights", "run-1", session_id="caller-a"))
+
+    assert worker.memory.history("caller-a") == (
+        Turn(user_text="turn on the lights", agent_text="Sure, done."),
+    )
+
+
+def test_handle_user_turn_passes_prior_turns_to_planner_as_history():
+    planner = ScriptedPlanner([FinalResponse(text="It's sunny.")])
+    worker = AgentWorker(_dry_run_config(), planner=planner)
+    worker.memory.add_turn("caller-a", "hi", "hello there")
+
+    asyncio.run(worker.handle_user_turn("what's the weather?", "run-2", session_id="caller-a"))
+
+    assert planner.seen_history == [(Turn(user_text="hi", agent_text="hello there"),)]
+
+
+def test_handle_user_turn_memory_persists_across_turns_in_the_same_session():
+    planner = ScriptedPlanner(
+        [FinalResponse(text="Nice to meet you, Sam."), FinalResponse(text="Your name is Sam.")]
+    )
+    worker = AgentWorker(_dry_run_config(), planner=planner)
+
+    asyncio.run(worker.handle_user_turn("my name is Sam", "run-1", session_id="caller-a"))
+    asyncio.run(worker.handle_user_turn("what's my name?", "run-2", session_id="caller-a"))
+
+    history = worker.memory.history("caller-a")
+    assert [t.user_text for t in history] == ["my name is Sam", "what's my name?"]
+    assert planner.seen_history[1] == (Turn(user_text="my name is Sam", agent_text="Nice to meet you, Sam."),)
+
+
+def test_handle_user_turn_memory_is_scoped_per_session():
+    planner = ScriptedPlanner([FinalResponse(text="ok caller-a"), FinalResponse(text="ok caller-b")])
+    worker = AgentWorker(_dry_run_config(), planner=planner)
+
+    asyncio.run(worker.handle_user_turn("hello from a", "run-1", session_id="caller-a"))
+    asyncio.run(worker.handle_user_turn("hello from b", "run-2", session_id="caller-b"))
+
+    assert [t.user_text for t in worker.memory.history("caller-a")] == ["hello from a"]
+    assert [t.user_text for t in worker.memory.history("caller-b")] == ["hello from b"]
+
+
+def test_handle_user_turn_defaults_session_id_to_run_id():
+    planner = ScriptedPlanner([FinalResponse(text="ok")])
+    worker = AgentWorker(_dry_run_config(), planner=planner)
+
+    asyncio.run(worker.handle_user_turn("hello", "run-1"))
+
+    assert [t.user_text for t in worker.memory.history("run-1")] == ["hello"]
+
+
+def test_handle_user_turn_abandoned_by_tool_loop_exceeded_is_not_recorded():
+    worker = AgentWorker(_dry_run_config(), planner=AlwaysToolCallPlanner())
+    worker.tools.register("noop", lambda: None)
+
+    with pytest.raises(ToolLoopExceeded):
+        asyncio.run(worker.handle_user_turn("loop forever", "run-1", session_id="caller-a"))
+
+    assert worker.memory.history("caller-a") == ()
+
+
+def test_conversation_memory_is_bounded_within_a_very_long_session():
+    memory = ConversationMemory(max_turns=3)
+    for i in range(10):
+        memory.add_turn("caller-a", f"message {i}", f"reply {i}")
+
+    history = memory.history("caller-a")
+
+    assert len(history) == 3
+    assert [t.user_text for t in history] == ["message 7", "message 8", "message 9"]
 
 
 # --- barge-in (issue #7) ------------------------------------------------

@@ -35,7 +35,12 @@ Dashboard (pick a feature) ->
   reference text under every (provider, voice) via `voice_core.tts`,
   transcribes the result back via `voice_core.stt`, and scores intelligibility
   as WER against the original text, the same human-free proxy `comparison.py`
-  uses for STT model sizes
+  uses for STT model sizes. Also has latency benchmarking and generation
+  cost tracking (`benchmark.py`, issue #14) — times each STT/TTS comparison
+  run with the Phase 1 `voice_core.latency.LatencyTracker` and pairs it with
+  a documented per-second cost estimate (no real billing API in this
+  environment), producing one `BenchmarkEntry` shape shared by both
+  categories so they're directly comparable
 - `voice_rag_chatbot` feature app — ported from `python-voice-rag-chatbot`
   (`src/voice_rag_chatbot/`): mic/file capture, transcription, RAG retrieval,
   LLM response, TTS playback

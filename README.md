@@ -18,34 +18,36 @@ instead of four disconnected CLI tools.
 
 ## Combines
 
-This is a flagship suite that will combine 4 voice/speech repos into one web
-app with all 4 features selectable from a single dashboard UI — the same
-combined-suite pattern already used in this portfolio for
-`video-analytics-suite`, `medical-imaging-suite`, `trading-ai-suite`,
-`cv-suite`, `automl-platform-suite`, `document-ai-suite`, and
-`clinical-llm-suite`:
+This flagship suite combines 4 voice/speech repos into one web app with all
+4 features selectable from a single dashboard UI — the same combined-suite
+pattern already used in this portfolio for `video-analytics-suite`,
+`medical-imaging-suite`, `trading-ai-suite`, `cv-suite`,
+`automl-platform-suite`, `document-ai-suite`, and `clinical-llm-suite`:
 
-- [`realtime-voice-agent`](../realtime-voice-agent/) — LiveKit-based real-time
-  two-way voice agent: STT -> LLM -> TTS with barge-in/interruption handling,
-  tool calling, and cross-turn memory
-- [`voice-agent-evaluation`](../voice-agent-evaluation/) — persona-driven
-  simulated-caller batch testing of a voice agent, with LLM-as-judge scoring
-  and pass/fail + latency reporting
-- [`speech-model-evaluator`](../speech-model-evaluator/) — objective STT/TTS
-  provider comparison: WER, latency, and cost benchmarking across models and
-  vendors
-- [`python-voice-rag-chatbot`](../python-voice-rag-chatbot/) — lightweight
-  desktop mic -> RAG -> LLM -> TTS chatbot loop, without the real-time
-  streaming complexity of the LiveKit agent
+- [`realtime-voice-agent`](../portfolio-archived-repos/realtime-voice-agent/)
+  — LiveKit-based real-time two-way voice agent: STT -> LLM -> TTS with
+  barge-in/interruption handling, tool calling, and cross-turn memory
+- [`voice-agent-evaluation`](../portfolio-archived-repos/voice-agent-evaluation/)
+  — persona-driven simulated-caller batch testing of a voice agent, with
+  LLM-as-judge scoring and pass/fail + latency reporting
+- [`speech-model-evaluator`](../portfolio-archived-repos/speech-model-evaluator/)
+  — objective STT/TTS provider comparison: WER, latency, and cost
+  benchmarking across models and vendors
+- [`python-voice-rag-chatbot`](../portfolio-archived-repos/python-voice-rag-chatbot/)
+  — lightweight desktop mic -> RAG -> LLM -> TTS chatbot loop, without the
+  real-time streaming complexity of the LiveKit agent
 
-All 4 sit on the same STT/TTS/LLM voice-pipeline concept and already share
+All 4 sat on the same STT/TTS/LLM voice-pipeline concept and already shared
 Whisper for transcription; `voice-agent-evaluation` and
-`speech-model-evaluator` both exist specifically to *measure* the other two.
-One dashboard, one shared audio/session layer, four selectable features
-beats four near-duplicate STT/TTS plumbing implementations. The 4 originals
-will get an archived banner + `status-archived` badge and move to
-`E:\Projects\portfolio-archived-repos\` once this suite reaches feature
-parity with each of them — no code or git history is deleted, only relocated.
+`speech-model-evaluator` both existed specifically to *measure* the other
+two. One dashboard, one shared audio/session layer, four selectable features
+beats four near-duplicate STT/TTS plumbing implementations. Now that this
+suite has reached feature parity with each of them (Real-Time Voice Agent,
+Agent Evaluation, Speech Model Evaluator, and Voice RAG Chatbot all ported
+and wired against the shared `voice_core` layer), the 4 originals each got
+an archived banner + `status-archived` badge and moved to
+`E:\Projects\portfolio-archived-repos\` — no code or git history was
+deleted, only relocated.
 
 ## 1. Problem
 

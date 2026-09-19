@@ -29,7 +29,13 @@ Dashboard (pick a feature) ->
   can target `realtime_agent` as its agent-under-test once Phase 2 lands
 - `speech_evaluator` feature app — ported from `speech-model-evaluator`
   (`src/sme/`): dataset/manifest assembly, provider adapters, WER/latency/cost
-  metrics
+  metrics. Also has the Whisper size/version comparison harness
+  (`comparison.py`, issue #12) and, as of 2026-09-19, the TTS provider/voice
+  comparison harness (`tts_comparison.py`, issue #13) — synthesizes each
+  reference text under every (provider, voice) via `voice_core.tts`,
+  transcribes the result back via `voice_core.stt`, and scores intelligibility
+  as WER against the original text, the same human-free proxy `comparison.py`
+  uses for STT model sizes
 - `voice_rag_chatbot` feature app — ported from `python-voice-rag-chatbot`
   (`src/voice_rag_chatbot/`): mic/file capture, transcription, RAG retrieval,
   LLM response, TTS playback

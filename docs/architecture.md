@@ -54,7 +54,16 @@ Dashboard (pick a feature) ->
   API), and an atomically-written `JSONVectorStore`. `retrieval.py`'s
   `RagRetriever` feeds a `voice_core.audio.AudioSource` capture through
   `voice_core.stt.SpeechToText` and embeds the transcribed text to query the
-  store — the same shared audio/STT layer every other feature app uses.
+  store — the same shared audio/STT layer every other feature app uses. As of
+  2026-09-19, LLM response generation is in too (`generation.py`, issue #16):
+  `ResponseGenerator` conditions a pluggable `LLMBackend` on the retrieved
+  chunks, applying the new knowledge-base "Grounded generation with
+  citation-or-fallback" pattern
+  (`E:\Projects\LLM\knowledge-base\rag\grounded-generation-with-citations.md`,
+  distilled from this issue since nothing matched closely beforehand) — a
+  retrieval miss short-circuits to a fixed fallback without ever calling the
+  LLM backend, and a grounded response carries structured `SourceCitation`s
+  derived from chunk metadata rather than parsed out of the model's own text.
 
 ## Design Notes
 
